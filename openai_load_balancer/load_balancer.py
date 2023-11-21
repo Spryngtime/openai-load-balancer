@@ -82,9 +82,7 @@ class LoadBalancer:
 
     def try_send_request(self, method_name, **kwargs):
         """Try to send the request to active endpoints. If it fails, mark as failed and try the next active endpoint."""
-        # Keep track of attempts. If we've tried all possible endpoints, raise an exception
-        attempts = 0
-        while attempts < len(self.api_endpoints):
+        for _ in range(len(self.api_endpoints)):
             endpoint = self.get_next_active_endpoint()
 
             try:
@@ -95,7 +93,6 @@ class LoadBalancer:
             except Exception as e:
                 # Mark the endpoint as failed
                 endpoint.mark_failed()
-                attempts += 1
 
         # If all endpoints have been tried and failed, raise an exception
         raise Exception("All endpoints failed.")
