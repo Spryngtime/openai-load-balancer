@@ -3,13 +3,12 @@ import dotenv
 import openai
 from openai_load_balancer.api_endpoint import ApiEndpoint
 from tenacity import retry, wait_random_exponential, stop_after_attempt
-from config import MODEL_ENGINE_MAPPING, RETRY_WAIT_RANDOM_EXPONENTIAL_MIN, RETRY_WAIT_RANDOM_EXPONENTIAL_MAX, RETRY_STOP_AFTER_ATTEMPT
 import threading
 dotenv.load_dotenv()
 
 
 class LoadBalancer:
-    def __init__(self, endpoint_configs, failure_threshold, cooldown_period, load_balancing_enabled=True):
+    def __init__(self, endpoint_configs, failure_threshold, cooldown_period, load_balancing_enabled=True, model_engine_mapping=None):
         """Initializes the load balancer with the passed in endpoint configurations and other configs"""
         self.api_endpoints = [ApiEndpoint(**config)
                               for config in endpoint_configs]
@@ -17,6 +16,7 @@ class LoadBalancer:
         self.failure_threshold = failure_threshold
         self.cooldown_period = cooldown_period
         self.load_balancing_enabled = load_balancing_enabled
+        self.model_engine_mapping = model_engine_mapping
         self.lock = threading.Lock()  # Lock for thread safety
 
     def get_next_active_endpoint(self):
@@ -44,7 +44,7 @@ class LoadBalancer:
             # If we've tried all endpoints and none are active, raise an exception
             raise Exception("All endpoints are inactive.")
 
-    @retry(wait=wait_random_exponential(min=RETRY_WAIT_RANDOM_EXPONENTIAL_MIN, max=RETRY_WAIT_RANDOM_EXPONENTIAL_MAX), stop=stop_after_attempt(RETRY_STOP_AFTER_ATTEMPT))
+    @retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(5))
     def send_request(self, endpoint, method_name, **kwargs):
         """Calls OpenAI's API with the corresponding method and arguments to the passed in endpoint. If it fails, raises an exception"""
         # openai has a standard base_url, whereas for azure we'll read it from the environment variable
@@ -54,19 +54,22 @@ class LoadBalancer:
         openai.api_key = str(os.getenv(endpoint.api_key_env))
         openai.api_type = endpoint.api_type
 
+        model_engine_mapping = self.model_engine_mapping or {}
+
         # Adjust arguments for Azure
         if endpoint.api_type == "azure":
             # In Azure, instead of using the model keyword, you use the engine keyword. Get the appropriate engine name for the passed in model
             if "model" in kwargs:
-                engine_name = MODEL_ENGINE_MAPPING.get(kwargs["model"])
+                engine_name = model_engine_mapping.get(
+                    kwargs["model"], kwargs["model"])
                 kwargs["engine"] = engine_name
                 del kwargs["model"]
         if endpoint.api_type == "open_ai":
             # Do the same for switching from Azure engine to OpenAI model
             if "engine" in kwargs:
                 # since MODEL_ENGINE_MAPPING is a dict going from model -> engine, we need to invert it to get engine -> model
-                model_name = {v: k for k, v in MODEL_ENGINE_MAPPING.items()}.get(
-                    kwargs["engine"])
+                model_name = {v: k for k, v in model_engine_mapping.items()}.get(
+                    kwargs["engine"], kwargs["engine"])
                 kwargs["model"] = model_name
                 del kwargs["engine"]
         # Map method_name to the actual OpenAI function

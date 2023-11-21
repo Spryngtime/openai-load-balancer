@@ -1,13 +1,29 @@
+from datetime import timedelta
 import pytest
 from unittest.mock import patch, create_autospec, Mock
 from openai_load_balancer.load_balancer import LoadBalancer
 from openai_load_balancer.api_endpoint import ApiEndpoint
-from config import ENDPOINTS, FAILURE_THRESHOLD, COOLDOWN_PERIOD
 
 
 @pytest.fixture
 def load_balancer():
-    endpoint_configs = ENDPOINTS
+    endpoint_configs = [
+        {
+            "api_type": "azure",
+            "base_url": "AZURE_API_BASE_URL_1",
+            "api_key_env": "AZURE_API_KEY_1",
+            "version": "2023-05-15"
+        },
+        {
+            "api_type": "open_ai",
+            "base_url": "https://api.openai.com/v1",
+            "api_key_env": "OPENAI_API_KEY_1",
+            "version": None
+        },
+    ]
+    FAILURE_THRESHOLD = 5
+    COOLDOWN_PERIOD = timedelta(minutes=10)
+
     return LoadBalancer(endpoint_configs, failure_threshold=FAILURE_THRESHOLD, cooldown_period=COOLDOWN_PERIOD)
 
 

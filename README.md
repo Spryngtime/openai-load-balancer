@@ -25,12 +25,10 @@ pip install openai-load-balancer
 
 ## Usage
 
-## Configuration
-
-Modify the `config.py` file to set up your API endpoints, failure thresholds, and other settings. Put your API keys and base_urls into an .env file, and set the base_url and api_key_env according to your env variable names.
+First, setup your OpenAI API Endpoints. The API keys and base_url will be read from your env variable.
 
 ```python
-# Example configuration in config.py
+# Example configuration
 
 ENDPOINTS = [
     {
@@ -61,14 +59,14 @@ MODEL_ENGINE_MAPPING = {
 }
 ```
 
-### Basic Setup
-
-Import and initialize the load balancer:
+Import and initialize the load balancer with the endpoints and mapping:
 
 ```python
 from openai_load_balancer import initialize_load_balancer
 
-openai_load_balancer = initialize_load_balancer()
+openai_load_balancer = initialize_load_balancer(
+    endpoints=ENDPOINTS, model_engine_mapping=MODEL_ENGINE_MAPPING)
+
 ```
 
 ### Making API Calls
@@ -84,6 +82,19 @@ response = openai_load_balancer.ChatCompletion.create(
     ],
     # Additional parameters...
 )
+```
+
+### Additional configurations
+
+You can also configure the load balancer with the following variables
+
+```python
+# The number of consecutive failures of a request to an endpoint before the endpoint is temporarily marked as inactive
+FAILURE_THRESHOLD = 5
+# The minimum amount of time an endpoint is marked as inactive before it is reset to active.
+COOLDOWN_PERIOD = timedelta(minutes=10)
+# Whether or not to enable load balancing. If disabled, the first active endpoint will always be used, and other endpoints will only be used in case the first one fails.
+LOAD_BALANCING_ENABLED = True
 ```
 
 ## Contributing
