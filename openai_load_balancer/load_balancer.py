@@ -30,15 +30,19 @@ class LoadBalancer:
                     # If the first endpoint is inactive, proceed to find the next active one
                     self.current_index = 1
 
-            original_index = self.current_index
-            while True:
+            for _ in range(len(self.api_endpoints)):
+                # get the current endpoint
                 endpoint = self.api_endpoints[self.current_index]
-                self.current_index = (self.current_index +
-                                      1) % len(self.api_endpoints)
 
-                if endpoint.is_active(self.failure_threshold, self.cooldown_period) or self.current_index == original_index:
-                    # If the endpoint is active, return it. If we've looped through all endpoints and none are active, return the endpoint of the original index (which would be inactive)
+                # Increment the current index (so the next time we call this function, we'll get the next endpoint in the list). If we've reached the end of the list, loop back to the beginning
+                self.current_index = (
+                    self.current_index + 1) % len(self.api_endpoints)
+
+                if endpoint.is_active(self.failure_threshold, self.cooldown_period):
                     return endpoint
+
+            # If we've tried all endpoints and none are active, raise an exception
+            raise Exception("All endpoints are inactive.")
 
     @retry(wait=wait_random_exponential(min=RETRY_WAIT_RANDOM_EXPONENTIAL_MIN, max=RETRY_WAIT_RANDOM_EXPONENTIAL_MAX), stop=stop_after_attempt(RETRY_STOP_AFTER_ATTEMPT))
     def send_request(self, endpoint, method_name, **kwargs):

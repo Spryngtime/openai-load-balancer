@@ -167,3 +167,15 @@ def test_failure_count_reset_on_success(mock_send_request, load_balancer):
 
     load_balancer.try_send_request('test_method', test_arg='value')
     mock_endpoint.reset.assert_called()
+
+
+def test_all_endpoints_inactive(load_balancer):
+    mock_endpoints = [create_autospec(ApiEndpoint, instance=True) for _ in range(
+        len(load_balancer.api_endpoints))]
+    for mock_endpoint in mock_endpoints:
+        mock_endpoint.is_active.return_value = False
+        mock_endpoint.mark_failed = Mock()
+    load_balancer.api_endpoints = mock_endpoints
+    with pytest.raises(Exception) as excinfo:
+        load_balancer.try_send_request('test_method', test_arg='value')
+    assert str(excinfo.value) == "All endpoints are inactive."
