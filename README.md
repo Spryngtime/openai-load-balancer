@@ -1,5 +1,7 @@
 # OpenAI Load Balancer
 
+Made with Open Source ❤️ from the team at [Spryngtime](https://www.spryngtime.com/) (YC W22).
+
 ## Description
 
 The OpenAI Load Balancer is a Python library designed to distribute API requests across multiple endpoints (supports both OpenAI and Azure). It implements a round-robin mechanism for load balancing and includes exponential backoff for retrying failed requests.
