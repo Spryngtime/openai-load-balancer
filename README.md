@@ -23,6 +23,8 @@ To install the OpenAI Load Balancer, run the following command:
 pip install openai-load-balancer
 ```
 
+PyPi - https://pypi.org/project/openai-load-balancer/
+
 ## Usage
 
 First, setup your OpenAI API Endpoints. The API keys and base_url will be read from your env variable.
