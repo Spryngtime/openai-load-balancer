@@ -48,22 +48,24 @@ class LoadBalancer:
     def send_request(self, endpoint, method_name, **kwargs):
         """Calls OpenAI's API with the corresponding method and arguments to the passed in endpoint. If it fails, raises an exception"""
         # openai has a standard base_url, whereas for azure we'll read it from the environment variable
-        openai.api_base = str(os.getenv(
-            endpoint.base_url)) if endpoint.api_type == "azure" else endpoint.base_url
+        #openai.api_base = str(os.getenv(endpoint.base_url)) if endpoint.api_type == "azure" else endpoint.base_url
+        openai.api_base = endpoint.base_url
         openai.api_version = endpoint.version
-        openai.api_key = str(os.getenv(endpoint.api_key_env))
+        openai.api_key = str(endpoint.api_key_env)
         openai.api_type = endpoint.api_type
 
         model_engine_mapping = self.model_engine_mapping or {}
-
         # Adjust arguments for Azure
         if endpoint.api_type == "azure":
             # In Azure, instead of using the model keyword, you use the engine keyword. Get the appropriate engine name for the passed in model
-            if "model" in kwargs:
-                engine_name = model_engine_mapping.get(
-                    kwargs["model"], kwargs["model"])
-                kwargs["engine"] = engine_name
+            if "model" in kwargs:  ## azure endpoints need the deployment name, not a model name
+                kwargs["engine"] = endpoint.deployment
                 del kwargs["model"]
+            #if "model" in kwargs:
+            #    engine_name = model_engine_mapping.get(
+            #        kwargs["model"], kwargs["model"])
+            #    kwargs["engine"] = engine_name
+            #    del kwargs["model"]
         if endpoint.api_type == "open_ai":
             # Do the same for switching from Azure engine to OpenAI model
             if "engine" in kwargs:
@@ -95,6 +97,7 @@ class LoadBalancer:
                 return response
             except Exception as e:
                 # Mark the endpoint as failed
+                print(e)
                 endpoint.mark_failed()
 
         # If all endpoints have been tried and failed, raise an exception

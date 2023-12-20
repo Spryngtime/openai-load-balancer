@@ -3,11 +3,12 @@ from datetime import datetime
 
 
 class ApiEndpoint:
-    def __init__(self, api_type, base_url, api_key_env, version=None):
+    def __init__(self, api_type, base_url, api_key_env, deployment, version=None):
         """Inits an API endpoint based on the passed in configuration. You can make adjustments to your configurations in config.py"""
         self.api_type = api_type
-        self.base_url = base_url
+        self.base_url = base_url    
         self.api_key_env = api_key_env
+        self.deployment = deployment
         self.version = version
         self.failure_count = 0
         self.last_failed_time = None
