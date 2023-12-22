@@ -1,5 +1,8 @@
 import os
 import dotenv
+import logging
+logger = logging.getLogger(__name__)
+logger.propagate = True
 import openai
 from openai_load_balancer.api_endpoint import ApiEndpoint
 from tenacity import retry, wait_random_exponential, stop_after_attempt
@@ -49,6 +52,7 @@ class LoadBalancer:
         """Calls OpenAI's API with the corresponding method and arguments to the passed in endpoint. If it fails, raises an exception"""
         # openai has a standard base_url, whereas for azure we'll read it from the environment variable
         #openai.api_base = str(os.getenv(endpoint.base_url)) if endpoint.api_type == "azure" else endpoint.base_url
+        logger.info(f'sending request to {endpoint.base_url}')
         openai.api_base = endpoint.base_url
         openai.api_version = endpoint.version
         openai.api_key = str(endpoint.api_key_env)
@@ -97,7 +101,7 @@ class LoadBalancer:
                 return response
             except Exception as e:
                 # Mark the endpoint as failed
-                print(e)
+                logger.error(e)
                 endpoint.mark_failed()
 
         # If all endpoints have been tried and failed, raise an exception
