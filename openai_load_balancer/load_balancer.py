@@ -1,9 +1,13 @@
 import os
 import dotenv
+import logging
+logger = logging.getLogger(__name__)
+logger.propagate = True
 import openai
 from openai_load_balancer.api_endpoint import ApiEndpoint
 from tenacity import retry, wait_random_exponential, stop_after_attempt
 import threading
+import time
 dotenv.load_dotenv()
 
 
@@ -23,47 +27,51 @@ class LoadBalancer:
         """Gets the next active endpoint to use. If load balancing is disabled, always returns the first endpoint, unless the first endpoint is in_active, then proceeds to find the next one. If load balancing is enabled, returns the next active endpoint."""
         with self.lock:  # Acquire lock for thread-safe access
             if not self.load_balancing_enabled:
-                # If load balancing is disabled, always try the first active endpoint
-                if self.api_endpoints[0].is_active(self.failure_threshold, self.cooldown_period):
-                    return self.api_endpoints[0]
-                else:
-                    # If the first endpoint is inactive, proceed to find the next active one
-                    self.current_index = 1
+                fastest_endpoints = sorted(self.api_endpoints, key=lambda x: x.response_time)
+                logger.info("Endpoint response times:\n\t" + "\n\t".join([f"{endpoint.base_url}: {endpoint.response_time:,}ms" for endpoint in fastest_endpoints]))
+                # If load balancing is disabled, always try the fastest active endpoint
+                for this_endpoint in fastest_endpoints:
+                    if this_endpoint.is_active(self.failure_threshold, self.cooldown_period):
+                        return this_endpoint
 
-            for _ in range(len(self.api_endpoints)):
-                # get the current endpoint
-                endpoint = self.api_endpoints[self.current_index]
+            elif self.load_balancing_enabled:
+                for _ in range(len(self.api_endpoints)):
+                    # get the current endpoint
+                    endpoint = self.api_endpoints[self.current_index]
 
-                # Increment the current index (so the next time we call this function, we'll get the next endpoint in the list). If we've reached the end of the list, loop back to the beginning
-                self.current_index = (
-                    self.current_index + 1) % len(self.api_endpoints)
+                    # Increment the current index (so the next time we call this function, we'll get the next endpoint in the list). If we've reached the end of the list, loop back to the beginning
+                    self.current_index = (
+                        self.current_index + 1) % len(self.api_endpoints)
 
-                if endpoint.is_active(self.failure_threshold, self.cooldown_period):
-                    return endpoint
+                    if endpoint.is_active(self.failure_threshold, self.cooldown_period):
+                        return endpoint
 
             # If we've tried all endpoints and none are active, raise an exception
             raise Exception("All endpoints are inactive.")
 
-    @retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(5))
+    @retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(1))
     def send_request(self, endpoint, method_name, **kwargs):
         """Calls OpenAI's API with the corresponding method and arguments to the passed in endpoint. If it fails, raises an exception"""
         # openai has a standard base_url, whereas for azure we'll read it from the environment variable
-        openai.api_base = str(os.getenv(
-            endpoint.base_url)) if endpoint.api_type == "azure" else endpoint.base_url
+        #openai.api_base = str(os.getenv(endpoint.base_url)) if endpoint.api_type == "azure" else endpoint.base_url
+        logger.info(f'sending request to {endpoint.base_url}')
+        openai.api_base = endpoint.base_url
         openai.api_version = endpoint.version
-        openai.api_key = str(os.getenv(endpoint.api_key_env))
+        openai.api_key = str(endpoint.api_key_env)
         openai.api_type = endpoint.api_type
 
         model_engine_mapping = self.model_engine_mapping or {}
-
         # Adjust arguments for Azure
         if endpoint.api_type == "azure":
             # In Azure, instead of using the model keyword, you use the engine keyword. Get the appropriate engine name for the passed in model
-            if "model" in kwargs:
-                engine_name = model_engine_mapping.get(
-                    kwargs["model"], kwargs["model"])
-                kwargs["engine"] = engine_name
+            if "model" in kwargs:  ## azure endpoints need the deployment name, not a model name
+                kwargs["engine"] = endpoint.deployment
                 del kwargs["model"]
+            #if "model" in kwargs:
+            #    engine_name = model_engine_mapping.get(
+            #        kwargs["model"], kwargs["model"])
+            #    kwargs["engine"] = engine_name
+            #    del kwargs["model"]
         if endpoint.api_type == "open_ai":
             # Do the same for switching from Azure engine to OpenAI model
             if "engine" in kwargs:
@@ -89,12 +97,20 @@ class LoadBalancer:
             endpoint = self.get_next_active_endpoint()
 
             try:
+                start_time = time.time()
                 response = self.send_request(endpoint, method_name, **kwargs)
+                end_time = time.time()
+                duration = (end_time - start_time) * 1000  # milliseconds
+                duration = int(duration)
+                endpoint.set_response_time(duration)
+                logger.info(f"Endpoint {endpoint.base_url} responded in {duration}ms")
                 # Reset the endpoint on a successful request
                 endpoint.reset()
                 return response
             except Exception as e:
                 # Mark the endpoint as failed
+                logger.error(e)
+                logger.error(f"Endpoint {endpoint.base_url} failed.")
                 endpoint.mark_failed()
 
         # If all endpoints have been tried and failed, raise an exception
