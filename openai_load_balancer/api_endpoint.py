@@ -11,6 +11,7 @@ class ApiEndpoint:
         self.deployment = deployment
         self.version = version
         self.failure_count = 0
+        self.response_time = -1
         self.last_failed_time = None
         self.lock = threading.Lock()  # Adding a lock for thread safety
 
@@ -35,3 +36,8 @@ class ApiEndpoint:
         with self.lock:  # Ensure thread-safe state update
             self.failure_count += 1
             self.last_failed_time = datetime.now()
+
+    def set_response_time(self, response_time):
+        """Sets the response time of the endpoint"""
+        with self.lock:
+            self.response_time = response_time
