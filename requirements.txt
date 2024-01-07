@@ -1,5 +1,0 @@
-openai>=0.27.0,<0.28.1
-pytest==7.4.3
-pytest-mock==3.12.0
-tenacity==8.2.3
-python-dotenv==1.0.0
